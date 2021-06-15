@@ -411,12 +411,13 @@ class JavaST:
                         body = root.parent.parent.child_of_type('Body')
                         c.relink(body)
                     elif root.parent.type == 'ClassCreator':
-                        arguments = root.parent.child_of_type('InvocationArguments')
-                        if not arguments:
-                            arguments = InvocationArguments()
-                            arguments.parent = root.parent
-                            root.parent.children = root.parent.children + [arguments]
-                        c.relink(arguments)
+                        if c._decl in root.parent._decl.arguments:
+                            arguments = root.parent.child_of_type('InvocationArguments')
+                            if not arguments:
+                                arguments = InvocationArguments()
+                                arguments.parent = root.parent
+                                root.parent.children = root.parent.children + [arguments]
+                            c.relink(arguments)
                     else:
                         c.relink(root.parent)
 
@@ -428,25 +429,20 @@ class JavaST:
                 'WhileStatement',
                 'IfStatement',
             ]:
-                condition = root.child_of_type('Condition')
-                if not condition:
-                    condition = Condition()
-                    condition.parent = root
-                    root.children = [condition] + root.children
                 if c.type not in [
                     'BlockStatement',
                 ]:
+                    condition = root.child_of_type('Condition')
+                    if not condition:
+                        condition = Condition()
+                        condition.parent = root
+                        root.children = [condition] + root.children
                     c.relink(condition)
 
             if root.type in [
                 'MethodInvocation',
                 'ClassCreator',
             ]:
-                arguments = root.child_of_type('InvocationArguments')
-                if not arguments:
-                    arguments = InvocationArguments()
-                    arguments.parent = root
-                    root.children = root.children + [arguments]
                 if c.type not in [
                     'Accessor',
                     'Identifier',
@@ -455,7 +451,13 @@ class JavaST:
                     'ReferenceType',
                     'BasicType',
                 ]:
-                    c.relink(arguments)
+                    if c._decl in root._decl.arguments:
+                        arguments = root.child_of_type('InvocationArguments')
+                        if not arguments:
+                            arguments = InvocationArguments()
+                            arguments.parent = root
+                            root.children = root.children + [arguments]
+                        c.relink(arguments)
 
             self.__fixup(c)
 
