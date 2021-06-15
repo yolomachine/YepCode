@@ -407,7 +407,7 @@ class JavaST:
                 if c.type not in [
                     'Identifier',
                 ]:
-                    if root.parent.type == 'Signature':
+                    if root.parent.type == 'Signature' and c.type != 'FormalParameter':
                         body = root.parent.parent.child_of_type('Body')
                         c.relink(body)
                     elif root.parent.type == 'ClassCreator':
