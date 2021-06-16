@@ -1,0 +1,11 @@
+*/shelf/
+*/httpRequests/
+/.idea
+/venv
+*__pycache__
+*.java
+*.java.ast
+*.java.ast.stm
+*.corpus
+*.vocab
+samples/

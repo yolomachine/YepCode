@@ -27,7 +27,7 @@ class ParsedNode:
         ))
 
     def __repr__(self):
-        return f'{self.type}' + (f'`{self.token}`' if self.token else '')
+        return self.type or self.token or ''
 
     @staticmethod
     def clone(node: ParsedNode) -> ParsedNode:
@@ -329,8 +329,11 @@ class BinaryOperation(ParsedNode):
 
 
 class JavaST:
-    def __init__(self, source_code: str = None, root: ParsedNode = None):
+    def __init__(self, source_code: str = None, source_code_path: str = None, root: ParsedNode = None):
         self.__javalang_root = javalang.parse.parse(source_code) if source_code else None
+        if not self.__javalang_root and source_code_path:
+            with open(source_code_path, 'r', encoding='utf-8') as fp:
+                self.__javalang_root = javalang.parse.parse(fp.read())
         self.__node_map = defaultdict(lambda: lambda javalang_node: ParsedNode(jln=javalang_node), dict(
             CompilationUnit=lambda javalang_node: CompilationUnit(javalang_node),
             Import=lambda javalang_node: Import(javalang_node),
@@ -540,57 +543,52 @@ class JavaST:
             vocab[node.type or node.token] += 1
         return vocab
 
-    def as_statement_sequence(self) -> List[JavaST]:
+    def as_statement_tree_sequence(self) -> List[JavaST]:
         return self.__traverse_statements()
 
 
-def build_syntax_tree(args) -> None:
+def generate_tree_representations(args) -> None:
     path = args.path
     pre, ext = os.path.splitext(path)
     try:
         with open(path, 'r', encoding='utf-8') as fp:
             tree = JavaST(source_code=fp.read())
-        print(f'{path} read successfully')
     except:
         print(f'Couldn\'t read {path}')
 
     try:
-        with open(pre + '.javast', 'w', encoding='utf-8') as fp:
+        with open(pre + '.java.ast', 'w', encoding='utf-8') as fp:
             print(tree, file=fp, sep='')
         print(f'Generated {pre + ".javast"}')
     except:
-        print(f'Couldn\'t generate {pre + ".javast"}')
+        print(f'Couldn\'t generate {pre + ".java.ast"}')
 
     if args.json:
         try:
             with open(pre + '.javast.json', 'w', encoding='utf-8') as fp:
                 json.dump(tree.as_json(), fp, indent=4)
-            print(f'Generated {pre + ".javast.json"}')
+            print(f'Generated {pre + ".java.ast.json"}')
         except:
-            print(f'Couldn\'t generate {pre + ".javast.json"}')
+            print(f'Couldn\'t generate {pre + ".java.ast.json"}')
 
     try:
-        vocab = tree.as_vocab()
-        with open(pre + '.javast.vocab', 'w', encoding='utf-8') as fp:
-            for key in vocab:
-                print(f'{key}: {vocab[key]}', file=fp)
-            print(f'\nUnique: {len(vocab.keys())}', file=fp)
-            print(f'Total: {sum(vocab.values())}', file=fp)
-        print(f'Generated {pre + ".javast.vocab"}')
-    except:
-        print(f'Couldn\'t generate {pre + ".javast.vocab"}')
-
-    try:
-        seq = tree.as_statement_sequence()
-        with open(pre + '.javast.seq', 'w', encoding='utf-8') as fp:
+        seq = tree.as_statement_tree_sequence()
+        with open(pre + '.javast.stm', 'w', encoding='utf-8') as fp:
             for block in seq:
                 print(f'{block}\n', file=fp)
-        print(f'Generated {pre + ".javast.seq"}')
+        print(f'Generated {pre + ".java.ast.stm"}')
     except:
-        print(f'Couldn\'t generate {pre + ".javast.seq"}')
+        print(f'Couldn\'t generate {pre + ".java.ast.stm"}')
 
 
-argparser = argparse.ArgumentParser(description='Build syntax tree for Java source code.')
-argparser.add_argument('path', help='path to .java file', action='store')
-argparser.add_argument('-j', '--json', help='additionaly stores the tree as a JSON object.', action='store_const', const=True, default=False)
-build_syntax_tree(argparser.parse_args())
+if __name__ == '__main__':
+    argparser = argparse.ArgumentParser(description='Build syntax tree for Java source code.')
+    argparser.add_argument('path',
+                           help='path to .java file',
+                           action='store')
+    argparser.add_argument('-j', '--json',
+                           help='additionally stores the tree as a JSON object.',
+                           action='store_const',
+                           const=True,
+                           default=False)
+    generate_tree_representations(argparser.parse_args())
