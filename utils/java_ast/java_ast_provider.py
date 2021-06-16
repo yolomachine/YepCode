@@ -527,6 +527,35 @@ class JavaST:
                 c.unlink()
                 sequence.append(JavaST(root=c))
             self.__traverse_statements(c, sequence)
+
+            can_unlink = False
+            can_unlink |= c.type in [
+                'Value',
+                'Accessor',
+                'CatchClause',
+            ]
+            if c.token:
+                can_unlink = True
+                can_unlink &= root.type not in [
+                    'OperatorSpecification',
+                ]
+                if root.type == 'Identifier':
+                    can_unlink &= str.lower(c.token) not in [
+                        'i', 'j', 'k', 'l', 'm', 'n',
+                    ]
+                    can_unlink &= root.parent.type not in [
+                        #'ReferenceType',
+                    ]
+            if can_unlink:
+                c.unlink()
+        if root.type in ['Identifier', 'OperatorSpecification']:
+            if len(root.children):
+                c = root.children[0]
+                c.unlink()
+                i = root.parent.children.index(root)
+                root.parent.children[i] = c
+            else:
+                root.unlink()
         return sequence
 
     def as_json(self) -> Dict[str, Any]:
