@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import json
 import os
 import javalang
 import argparse
+from typing import Any, Optional, Dict
 from collections import defaultdict
 
 
@@ -13,12 +16,12 @@ class ParsedNode:
         self.parent = kwargs.get('parent', None)
         self.children = kwargs.get('children', [])
 
-    def __try_override_type(self):
+    def __try_override_type(self) -> str:
         t = type(self._decl).__name__ if self._decl else f''
         return self.__type_map[t] or t
 
     @property
-    def __type_map(self):
+    def __type_map(self) -> defaultdict[Any, str]:
         return defaultdict(str, dict(
             VariableDeclarator='Variable',
         ))
@@ -26,19 +29,19 @@ class ParsedNode:
     def __repr__(self):
         return f'{self.type}' + (f'`{self.token}`' if self.token else '')
 
-    def unlink(self):
+    def unlink(self) -> None:
         if self.parent:
             index = self.parent.children.index(self)
             self.parent.children = self.parent.children[:index] + self.parent.children[index+1:]
             self.parent = None
 
-    def relink(self, node):
+    def relink(self, node) -> None:
         if node:
             self.unlink()
             self.parent = node
             node.children.append(self)
 
-    def child_of_type(self, node_type):
+    def child_of_type(self, node_type) -> Optional[ParsedNode]:
         for c in self.children:
             if c.type == node_type:
                 return c
@@ -187,7 +190,7 @@ class Expression(ParsedNode):
         super().__init__(jln=javalang_node)
         self._core = ParsedNode()
 
-    def _build(self):
+    def _build(self) -> None:
         if not self._decl:
             return
 
@@ -210,7 +213,7 @@ class Expression(ParsedNode):
             c.parent = self
 
     @property
-    def __map(self):
+    def __map(self) -> defaultdict[Any, str]:
         return defaultdict(lambda: 'Custom', {
             '+': 'Plus',
             '-': 'Minus',
@@ -251,7 +254,7 @@ class Assignment(ParsedNode):
             c.parent = self
 
     @property
-    def __map(self):
+    def __map(self) -> defaultdict[Any, str]:
         return defaultdict(lambda: 'Regular', {
             '+=': 'Addition',
             '-=': 'Subtraction',
@@ -274,7 +277,7 @@ class UnaryOperation(CustomNode):
             c.parent = self
 
     @property
-    def __map(self):
+    def __map(self) -> defaultdict[Any, str]:
         return defaultdict(lambda: 'Custom', {
             '+': 'Plus',
             '-': 'Minus',
@@ -294,7 +297,7 @@ class BinaryOperation(ParsedNode):
             c.parent = self
 
     @property
-    def __map(self):
+    def __map(self) -> defaultdict[Any, str]:
         return defaultdict(lambda: 'Custom', {
             '==': 'Equals',
             '!=': 'NotEquals',
@@ -341,7 +344,7 @@ class JavaST:
         self.__traverse()
         self.__fixup()
 
-    def __traverse(self):
+    def __traverse(self) -> None:
         parent_stack = []
         prev_depth = 0
         prev_node = ParsedNode()
@@ -371,7 +374,7 @@ class JavaST:
             prev_node = parsed
             prev_depth = depth
 
-    def __fixup(self, root: ParsedNode = None):
+    def __fixup(self, root: ParsedNode = None) -> None:
         root = root or self.root
         children = root.children[:]
         signature, body, condition = None, None, None
@@ -461,7 +464,7 @@ class JavaST:
 
             self.__fixup(c)
 
-    def __traverse_repr(self, root: ParsedNode = None, depth: int = 0):
+    def __traverse_repr(self, root: ParsedNode = None, depth: int = 0) -> str:
         if not root:
             self.__repr = []
             root = self.root
@@ -475,7 +478,7 @@ class JavaST:
     def __repr__(self):
         return self.__traverse_repr().strip('\n')
 
-    def __traverse_json(self, root: ParsedNode = None):
+    def __traverse_json(self, root: ParsedNode = None) -> Dict[str, Any]:
         root = root or self.root
         jo = dict()
         if root.type and root.type != 'None':
@@ -490,10 +493,10 @@ class JavaST:
 
         return jo
 
-    def as_json(self):
+    def as_json(self) -> Dict[str, Any]:
         return self.__traverse_json()
 
-    def as_vocab(self):
+    def as_vocab(self) -> Dict[str, int]:
         vocab = defaultdict(int)
         queue = [self.root]
         while len(queue) > 0:
@@ -505,7 +508,7 @@ class JavaST:
         return vocab
 
 
-def build_syntax_tree(args):
+def build_syntax_tree(args) -> None:
     path = args.path
     pre, ext = os.path.splitext(path)
     try:
