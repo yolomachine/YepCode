@@ -4,7 +4,7 @@ import json
 import os
 import javalang
 import argparse
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List
 from collections import defaultdict
 
 
@@ -28,6 +28,14 @@ class ParsedNode:
 
     def __repr__(self):
         return f'{self.type}' + (f'`{self.token}`' if self.token else '')
+
+    @staticmethod
+    def clone(node: ParsedNode) -> ParsedNode:
+        clone = ParsedNode(type=node.type, token=node.token)
+        for c in node.children:
+            child_clone = ParsedNode.clone(c)
+            child_clone.relink(clone)
+        return clone
 
     def unlink(self) -> None:
         if self.parent:
@@ -321,9 +329,9 @@ class BinaryOperation(ParsedNode):
 
 
 class JavaST:
-    def __init__(self, source_code):
-        self._javalang_root = javalang.parse.parse(source_code)
-        self._node_map = defaultdict(lambda: lambda javalang_node: ParsedNode(jln=javalang_node), dict(
+    def __init__(self, source_code: str = None, root: ParsedNode = None):
+        self.__javalang_root = javalang.parse.parse(source_code) if source_code else None
+        self.__node_map = defaultdict(lambda: lambda javalang_node: ParsedNode(jln=javalang_node), dict(
             CompilationUnit=lambda javalang_node: CompilationUnit(javalang_node),
             Import=lambda javalang_node: Import(javalang_node),
             ClassDeclaration=lambda javalang_node: Declaration(javalang_node),
@@ -339,19 +347,20 @@ class JavaST:
             BasicType=lambda javalang_node: Type(javalang_node),
             ReferenceType=lambda javalang_node: Type(javalang_node),
         ))
-        self.root = ParsedNode()
+        self.root = root or ParsedNode()
         self.__repr = []
-        self.__traverse()
-        self.__fixup()
+        if source_code:
+            self.__traverse()
+            self.__fixup()
 
     def __traverse(self) -> None:
         parent_stack = []
         prev_depth = 0
         prev_node = ParsedNode()
-        for path, node in self._javalang_root:
+        for path, node in self.__javalang_root:
             depth = len(path)
             name = type(node).__name__
-            parsed = self._node_map[name](node)
+            parsed = self.__node_map[name](node)
 
             if depth == 0:
                 self.root = parsed
@@ -493,6 +502,30 @@ class JavaST:
 
         return jo
 
+    def __traverse_statements(self, root: ParsedNode = None, sequence: List[JavaST] = None) -> List[JavaST]:
+        root = root or ParsedNode.clone(self.root)
+        sequence = sequence or []
+        for c in root.children[:]:
+            if c.type in [
+                'ClassDeclaration',
+                'ConstructorDeclaration',
+                'MethodDeclaration',
+                'FieldDeclaration',
+                'LocalVariableDeclaration',
+                'StatementExpression',
+                'ForStatement',
+                'WhileStatement',
+                'IfStatement',
+                'ReturnStatement',
+                'TryStatement',
+                'CatchClause',
+                'MethodInvocation',
+            ]:
+                c.unlink()
+                sequence.append(JavaST(root=c))
+            self.__traverse_statements(c, sequence)
+        return sequence
+
     def as_json(self) -> Dict[str, Any]:
         return self.__traverse_json()
 
@@ -507,6 +540,9 @@ class JavaST:
             vocab[node.type or node.token] += 1
         return vocab
 
+    def as_statement_sequence(self) -> List[JavaST]:
+        return self.__traverse_statements()
+
 
 def build_syntax_tree(args) -> None:
     path = args.path
@@ -514,16 +550,16 @@ def build_syntax_tree(args) -> None:
     try:
         with open(path, 'r', encoding='utf-8') as fp:
             tree = JavaST(source_code=fp.read())
-        print(f'{path} read successfully.')
+        print(f'{path} read successfully')
     except:
-        print(f'Couldn\'t read {path}.')
+        print(f'Couldn\'t read {path}')
 
     try:
         with open(pre + '.javast', 'w', encoding='utf-8') as fp:
             print(tree, file=fp, sep='')
         print(f'Generated {pre + ".javast"}')
     except:
-        print(f'Couldn\'t generate {pre + ".javast"}.')
+        print(f'Couldn\'t generate {pre + ".javast"}')
 
     if args.json:
         try:
@@ -531,7 +567,7 @@ def build_syntax_tree(args) -> None:
                 json.dump(tree.as_json(), fp, indent=4)
             print(f'Generated {pre + ".javast.json"}')
         except:
-            print(f'Couldn\'t generate {pre + ".javast.json"}.')
+            print(f'Couldn\'t generate {pre + ".javast.json"}')
 
     try:
         vocab = tree.as_vocab()
@@ -542,7 +578,16 @@ def build_syntax_tree(args) -> None:
             print(f'Total: {sum(vocab.values())}', file=fp)
         print(f'Generated {pre + ".javast.vocab"}')
     except:
-        print(f'Couldn\'t generate {pre + ".javast.vocab"}.')
+        print(f'Couldn\'t generate {pre + ".javast.vocab"}')
+
+    try:
+        seq = tree.as_statement_sequence()
+        with open(pre + '.javast.seq', 'w', encoding='utf-8') as fp:
+            for block in seq:
+                print(f'{block}\n', file=fp)
+        print(f'Generated {pre + ".javast.seq"}')
+    except:
+        print(f'Couldn\'t generate {pre + ".javast.seq"}')
 
 
 argparser = argparse.ArgumentParser(description='Build syntax tree for Java source code.')
