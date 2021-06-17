@@ -10,3 +10,4 @@
 *.vocab
 samples/
 *.w2v*
+*.ft*

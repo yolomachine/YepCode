@@ -4,7 +4,8 @@ import argparse
 import os.path
 import time
 import multiprocessing
-from typing import List, Tuple
+import fasttext
+from typing import List, Union
 from java_ast_provider import JavaST, ParsedNode
 from tqdm import tqdm
 from gensim.models import Word2Vec
@@ -48,7 +49,7 @@ class JavaSTEncoder:
         return output
 
     @staticmethod
-    def sequentialize(paths: List[str] = None, source_codes: List[str] = None) -> Tuple[List[str], List[str]]:
+    def sequentialize(paths: List[str] = None, source_codes: List[str] = None, output_dir: str = None, prune: bool = False) -> List[str]:
         source_codes = source_codes or []
         paths = paths or []
         progress_bar = tqdm(position=0,
@@ -64,94 +65,97 @@ class JavaSTEncoder:
                 progress_bar.close()
                 time.sleep(0.5)
         corpus = set()
-        vocabulary = set()
         for sc in tqdm(source_codes,
                        total=len(source_codes),
                        position=0,
                        leave=True,
-                       desc=f'Building corpus and vocabulary'):
+                       desc=f'Building corpus'):
             try:
                 tree = JavaST(source_code=sc)
-                sequences = list(map(lambda s: JavaSTEncoder.__unfold_tree(s), tree.as_statement_tree_sequence()))
+                sequences = list(map(lambda s: JavaSTEncoder.__unfold_tree(s), tree.as_statement_tree_sequence(prune)))
                 for s in sequences:
                     corpus.add(s)
-                    for w in s.split(' '):
-                        vocabulary.add(w)
             except:
                 pass
-        return list(corpus), list(vocabulary)
 
-    @staticmethod
-    def sass(output_dir: str, paths: List[str] = None, source_codes: List[str] = None) -> str:
-        try:
-            corpus, vocab = JavaSTEncoder.sequentialize(paths=paths, source_codes=source_codes)
-            if len(corpus) > 0 and len(vocab) > 0:
+        corpus = list(corpus)
+        if output_dir:
+            try:
                 corpus_path = os.path.join(output_dir, 'java.corpus')
-
                 with open(corpus_path, 'w', encoding='utf-8') as fp:
                     print('\n'.join(corpus), file=fp)
                 print(f'Generated {corpus_path}')
+            except:
+                print(f'Couldn\'t serialize corpus')
 
-                return corpus_path
-        except:
-            print(f'Couldn\'t generate corpus')
+        return corpus
 
     @staticmethod
-    def w2v(corpus_path: str) -> Word2Vec:
-        cores = multiprocessing.cpu_count()
-        w2v_model = Word2Vec(sentences=Corpus(corpus_path),
-                             workers=cores-1, min_count=1,
-                             epochs=30, vector_size=192, sample=1e-3)
-        return w2v_model
+    def train_model(model: str, corpus_path: str) -> Union[Word2Vec, fasttext.FastText._FastText]:
+        path = os.path.join(os.path.dirname(corpus_path),
+                            os.path.splitext(os.path.basename(corpus_path))[0] + f'.{model}')
+        sims_path = path + '.sims'
 
+        if model == 'w2v':
+            cores = multiprocessing.cpu_count()
+            w2v_model = Word2Vec(sentences=Corpus(corpus_path),
+                                 workers=cores - 1, min_count=1,
+                                 epochs=30, vector_size=192, sample=1e-3)
+            try:
+                w2v_model.save(fname_or_handle=path)
+                print(f'Generated {path}')
+            except:
+                print(f'Couldn\'t save Word2Vec model')
 
-def generate_corpus(path: str, output_dir: str = None) -> None:
-    output_dir = output_dir or (path if os.path.isdir(path) else os.path.dirname(path))
-    JavaSTEncoder.sass(output_dir, paths=[path])
+            try:
+                with open(sims_path, 'w', encoding='utf-8') as fp:
+                    for i, w in enumerate(w2v_model.wv.index_to_key):
+                        sim = "\n".join(map(str, w2v_model.wv.most_similar(positive=[w])))
+                        print(f'{w}[{sim}]\n', file=fp)
+                print(f'Generated {sims_path}')
+            except:
+                print(f'Couldn\'t save Word2Vec model similarities')
 
+            return w2v_model
 
-def learn_w2v_embeddings(path: str, output_dir: str = None):
-    output_dir = output_dir or (path if os.path.isdir(path) else os.path.dirname(path))
-    w2v_model = JavaSTEncoder.w2v(path)
-    name = 'java.w2v'
-    if not os.path.isdir(path):
-        pre, ext = os.path.splitext(path)
-        name = f'{pre}{ext}.w2v'
-    model_path = os.path.join(output_dir, name)
-    try:
-        w2v_model.save(fname_or_handle=model_path)
-        print(f'Generated {model_path}')
-    except:
-        print(f'Couldn\'t save Word2Vec model')
+        if model == 'ft':
+            ft_model = fasttext.train_unsupervised(corpus_path, dim=192)
 
+            try:
+                ft_model.save_model(path)
+                print(f'Generated {path}')
+            except:
+                print(f'Couldn\'t save fastText model')
 
-def load_w2v_model(path: str):
-    try:
-        w2v_model = Word2Vec.load(fname=path)
-        pre, ext = os.path.splitext(os.path.basename(path))
-        sim_path = os.path.join(os.path.dirname(path), pre + ext + '.sim')
-        print(w2v_model.wv.index_to_key)
-        print(f'Total words: {len(w2v_model.wv.index_to_key)}')
-        with open(sim_path, 'w', encoding='utf-8') as fp:
-            for i, w in enumerate(w2v_model.wv.index_to_key):
-                sim = "\n".join(map(str, w2v_model.wv.most_similar(positive=[w])))
-                print(f'{w}[{sim}]\n', file=fp)
-        print(f'Generated {sim_path}')
-    except:
-        print(f'Couldn\'t load {path}')
+            try:
+                with open(sims_path, 'w', encoding='utf-8') as fp:
+                    for w in ft_model.words:
+                        sim = "\n".join(map(str, ft_model.get_nearest_neighbors(w, k=10)))
+                        print(f'{w}[{sim}]\n', file=fp)
+                print(f'Generated {sims_path}')
+            except:
+                print(f'Couldn\'t save fastText model similarities')
+
+            return ft_model
 
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description='Sequentialize Java AST.')
+    argparser.add_argument('-od', '--output', metavar='PATH',
+                           help='path to output directory for [-jp, --java]',
+                           action='store')
     argparser.add_argument('-jp', '--java', metavar='PATH',
-                           help='path to `.java` file or directory containing `.java` files, generates corpus to [-od]',
+                           help='path to `.java` file or directory containing `.java` files, '
+                                'generates corpus to given path or [-od] if provided ',
                            action='store')
     argparser.add_argument('-cp', '--corpus', metavar='PATH',
                            help='path to `.corpus` file to learn embeddings from',
                            action='store')
-    argparser.add_argument('-od', '--output', metavar='PATH',
-                           help='path to output directory for [-jp, --java], [-w2v], [-w2v_sim]',
-                           action='store')
+    argparser.add_argument('-prune',
+                           help='prunes the AST if provided',
+                           action='store_const',
+                           const=True,
+                           default=False)
     argparser.add_argument('-w2v',
                            help='Word2Vec',
                            action='store_const',
@@ -162,17 +166,14 @@ if __name__ == '__main__':
                            action='store_const',
                            const=True,
                            default=False)
-    argparser.add_argument('-w2v_sim', metavar='PATH',
-                           help='path to Word2Vec model to generate similarities from',
-                           action='store')
 
     args = argparser.parse_args()
     if args.java:
-        generate_corpus(args.java, output_dir=args.output)
+        output_dir = args.output or (args.java if os.path.isdir(args.java) else os.path.dirname(args.java))
+        JavaSTEncoder.sequentialize(paths=[args.java], output_dir=output_dir, prune=args.prune)
 
     if args.corpus:
         if args.w2v:
-            learn_w2v_embeddings(args.corpus, output_dir=args.output)\
-
-    if args.w2v_sim:
-        load_w2v_model(args.w2v_sim)
+            JavaSTEncoder.train_model(model='w2v', corpus_path=args.corpus)
+        if args.ft:
+            JavaSTEncoder.train_model(model='ft', corpus_path=args.corpus)

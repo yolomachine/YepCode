@@ -505,7 +505,7 @@ class JavaST:
 
         return jo
 
-    def __traverse_statements(self, root: ParsedNode = None, sequence: List[JavaST] = None) -> List[JavaST]:
+    def __traverse_statements(self, root: ParsedNode = None, sequence: List[JavaST] = None, prune: bool = False) -> List[JavaST]:
         root = root or ParsedNode.clone(self.root)
         sequence = sequence or []
         for c in root.children[:]:
@@ -526,36 +526,39 @@ class JavaST:
             ]:
                 c.unlink()
                 sequence.append(JavaST(root=c))
-            self.__traverse_statements(c, sequence)
+            self.__traverse_statements(c, sequence, prune)
 
-            can_unlink = False
-            can_unlink |= c.type in [
-                'Value',
-                'Accessor',
-                'CatchClause',
-            ]
-            if c.token:
-                can_unlink = True
-                can_unlink &= root.type not in [
-                    'OperatorSpecification',
+            if prune:
+                can_unlink = False
+                can_unlink |= c.type in [
+                    'Value',
+                    'Accessor',
+                    'CatchClause',
                 ]
-                if root.type == 'Identifier':
-                    can_unlink &= str.lower(c.token) not in [
-                        'i', 'j', 'k', 'l', 'm', 'n',
+                if c.token:
+                    can_unlink = True
+                    can_unlink &= root.type not in [
+                        'OperatorSpecification',
                     ]
-                    can_unlink &= root.parent.type not in [
-                        #'ReferenceType',
-                    ]
-            if can_unlink:
-                c.unlink()
-        if root.type in ['Identifier', 'OperatorSpecification']:
-            if len(root.children):
-                c = root.children[0]
-                c.unlink()
-                i = root.parent.children.index(root)
-                root.parent.children[i] = c
-            else:
-                root.unlink()
+                    if root.type == 'Identifier':
+                        can_unlink &= str.lower(c.token) not in [
+                            'i', 'j', 'k', 'l', 'm', 'n',
+                        ]
+                        can_unlink &= root.parent.type not in [
+                            #'BasicType',
+                            #'ReferenceType',
+                        ]
+                if can_unlink:
+                    c.unlink()
+        if prune:
+            if root.type in ['Identifier', 'OperatorSpecification']:
+                if len(root.children):
+                    c = root.children[0]
+                    c.unlink()
+                    i = root.parent.children.index(root)
+                    root.parent.children[i] = c
+                else:
+                    root.unlink()
         return sequence
 
     def as_json(self) -> Dict[str, Any]:
@@ -572,8 +575,8 @@ class JavaST:
             vocab[node.type or node.token] += 1
         return vocab
 
-    def as_statement_tree_sequence(self) -> List[JavaST]:
-        return self.__traverse_statements()
+    def as_statement_tree_sequence(self, prune: bool = False) -> List[JavaST]:
+        return self.__traverse_statements(prune=prune)
 
 
 def generate_tree_representations(args) -> None:
