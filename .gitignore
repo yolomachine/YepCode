@@ -9,3 +9,4 @@
 *.corpus
 *.vocab
 samples/
+*.w2v*
