@@ -608,14 +608,14 @@ def generate_tree_representations(args) -> None:
         with open(pre + '.java.ast', 'w', encoding='utf-8') as fp:
             print(tree, file=fp, sep='')
         if not args.silent:
-            print(f'Generated {pre + ".javast"}')
+            print(f'Generated {pre + ".java.ast"}')
     except:
         if not args.silent:
             print(f'Couldn\'t generate {pre + ".java.ast"}')
 
     if args.json:
         try:
-            with open(pre + '.javast.json', 'w', encoding='utf-8') as fp:
+            with open(pre + '.java.ast.json', 'w', encoding='utf-8') as fp:
                 json.dump(tree.as_json(), fp, indent=4)
             if not args.silent:
                 print(f'Generated {pre + ".java.ast.json"}')
@@ -625,13 +625,13 @@ def generate_tree_representations(args) -> None:
 
     try:
         seq = tree.as_statement_tree_sequence(args.prune)
-        with open(pre + '.javast.stm', 'w', encoding='utf-8') as fp:
+        with open(pre + '.java.ast.stm', 'w', encoding='utf-8') as fp:
             for block in seq:
                 print(f'{block}\n', file=fp)
         if not args.silent:
             print(f'Generated {pre + ".java.ast.stm"}')
 
-        with open(pre + '.javast.stm.flat', 'w', encoding='utf-8') as fp:
+        with open(pre + '.java.ast.stm.flat', 'w', encoding='utf-8') as fp:
             for block in seq:
                 flattened = '\n'.join(block.flatten())
                 print(f'{flattened}\n', file=fp)

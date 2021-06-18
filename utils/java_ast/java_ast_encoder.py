@@ -4,12 +4,12 @@ import argparse
 import os.path
 import time
 import multiprocessing
-import fasttext
+import re
 from typing import List, Union
 from java_ast_provider import JavaST, ParsedNode
 from tqdm import tqdm
 from gensim.models import Word2Vec
-from gensim import utils
+from gensim.models import FastText
 
 
 class Corpus:
@@ -19,7 +19,7 @@ class Corpus:
     def __iter__(self):
         with open(self.path, 'r', encoding='utf-8') as fp:
             for line in fp:
-                yield utils.simple_preprocess(line)
+                yield re.findall(r"[^\s\"\']+|\"[^\"]*\"|\'[^\']*\'", line)
 
 
 class JavaSTEncoder:
@@ -91,20 +91,22 @@ class JavaSTEncoder:
         return corpus
 
     @staticmethod
-    def train_model(model: str, corpus_path: str) -> Union[Word2Vec, fasttext.FastText._FastText]:
+    def train_model(model: str, corpus_path: str) -> Union[Word2Vec, FastText]:
         path = os.path.join(os.path.dirname(corpus_path),
                             os.path.splitext(os.path.basename(corpus_path))[0] + f'.{model}')
         sims_path = path + '.sims'
+        cores = multiprocessing.cpu_count()
 
         if model == 'w2v':
-            cores = multiprocessing.cpu_count()
+            print('Training Word2Vec')
             w2v_model = Word2Vec(sentences=Corpus(corpus_path),
                                  workers=cores - 1, min_count=1,
                                  epochs=30, vector_size=192, sample=1e-3)
             try:
                 w2v_model.save(fname_or_handle=path)
                 print(f'Generated {path}')
-            except:
+            except Exception as e:
+                print(e)
                 print(f'Couldn\'t save Word2Vec model')
 
             try:
@@ -113,27 +115,32 @@ class JavaSTEncoder:
                         sim = "\n".join(map(str, w2v_model.wv.most_similar(positive=[w])))
                         print(f'{w}[{sim}]\n', file=fp)
                 print(f'Generated {sims_path}')
-            except:
+            except Exception as e:
+                print(e)
                 print(f'Couldn\'t save Word2Vec model similarities')
 
             return w2v_model
 
         if model == 'ft':
-            ft_model = fasttext.train_unsupervised(corpus_path, dim=192)
-
+            print('Training fastText')
+            ft_model = FastText(sentences=Corpus(corpus_path),
+                                workers=cores - 1, min_count=1,
+                                epochs=30, vector_size=192, sample=1e-3)
             try:
-                ft_model.save_model(path)
+                ft_model.save(fname_or_handle=path)
                 print(f'Generated {path}')
-            except:
+            except Exception as e:
+                print(e)
                 print(f'Couldn\'t save fastText model')
 
             try:
                 with open(sims_path, 'w', encoding='utf-8') as fp:
-                    for w in ft_model.words:
-                        sim = "\n".join(map(str, ft_model.get_nearest_neighbors(w, k=10)))
+                    for i, w in enumerate(ft_model.wv.index_to_key):
+                        sim = "\n".join(map(str, ft_model.wv.most_similar(positive=[w])))
                         print(f'{w}[{sim}]\n', file=fp)
                 print(f'Generated {sims_path}')
-            except:
+            except Exception as e:
+                print(e)
                 print(f'Couldn\'t save fastText model similarities')
 
             return ft_model
