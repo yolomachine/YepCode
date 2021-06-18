@@ -5,7 +5,7 @@ import json
 import os
 import javalang
 import argparse
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, Dict, List, Tuple
 from collections import defaultdict
 
 
@@ -579,19 +579,18 @@ class JavaST:
     def as_statement_tree_sequence(self, prune: bool = False) -> List[JavaST]:
         return self.__traverse_statements(prune=prune)
 
-    def flatten(self, root: ParsedNode = None, index: int = 0):
+    def flatten(self, root: ParsedNode = None, index: int = 0) -> Tuple[List[str], int]:
         root = root or self.root
         children_indices = []
         flattened = [f'{root}\t']
         for c in root.children:
             index += 1
             children_indices.append(index)
-            c_flat = self.flatten(c, index)
-            index += len(c_flat)
-            for i in c_flat:
-                flattened.append(i)
+            c_flat, index = self.flatten(c, index)
+            for child in c_flat:
+                flattened.append(child)
         flattened[0] = flattened[0] + ' '.join(map(str, children_indices))
-        return flattened
+        return flattened, index
 
 
 def generate_tree_representations(args) -> None:
@@ -633,7 +632,7 @@ def generate_tree_representations(args) -> None:
 
         with open(pre + '.java.ast.stm.flat', 'w', encoding='utf-8') as fp:
             for block in seq:
-                flattened = '\n'.join(block.flatten())
+                flattened = '\n'.join(block.flatten()[0])
                 print(f'{flattened}\n', file=fp)
         if not args.silent:
             print(f'Generated {pre + ".java.ast.stm.flat"}')
