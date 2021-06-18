@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import glob
 import json
 import os
 import javalang
@@ -578,6 +579,20 @@ class JavaST:
     def as_statement_tree_sequence(self, prune: bool = False) -> List[JavaST]:
         return self.__traverse_statements(prune=prune)
 
+    def flatten(self, root: ParsedNode = None, index: int = 0):
+        root = root or self.root
+        children_indices = []
+        flattened = [f'{root}\t']
+        for c in root.children:
+            index += 1
+            children_indices.append(index)
+            c_flat = self.flatten(c, index)
+            index += len(c_flat)
+            for i in c_flat:
+                flattened.append(i)
+        flattened[0] = flattened[0] + ' '.join(map(str, children_indices))
+        return flattened
+
 
 def generate_tree_representations(args) -> None:
     path = args.path
@@ -586,31 +601,46 @@ def generate_tree_representations(args) -> None:
         with open(path, 'r', encoding='utf-8') as fp:
             tree = JavaST(source_code=fp.read())
     except:
-        print(f'Couldn\'t read {path}')
+        if not args.silent:
+            print(f'Couldn\'t read {path}')
 
     try:
         with open(pre + '.java.ast', 'w', encoding='utf-8') as fp:
             print(tree, file=fp, sep='')
-        print(f'Generated {pre + ".javast"}')
+        if not args.silent:
+            print(f'Generated {pre + ".javast"}')
     except:
-        print(f'Couldn\'t generate {pre + ".java.ast"}')
+        if not args.silent:
+            print(f'Couldn\'t generate {pre + ".java.ast"}')
 
     if args.json:
         try:
             with open(pre + '.javast.json', 'w', encoding='utf-8') as fp:
                 json.dump(tree.as_json(), fp, indent=4)
-            print(f'Generated {pre + ".java.ast.json"}')
+            if not args.silent:
+                print(f'Generated {pre + ".java.ast.json"}')
         except:
-            print(f'Couldn\'t generate {pre + ".java.ast.json"}')
+            if not args.silent:
+                print(f'Couldn\'t generate {pre + ".java.ast.json"}')
 
     try:
-        seq = tree.as_statement_tree_sequence()
+        seq = tree.as_statement_tree_sequence(args.prune)
         with open(pre + '.javast.stm', 'w', encoding='utf-8') as fp:
             for block in seq:
                 print(f'{block}\n', file=fp)
-        print(f'Generated {pre + ".java.ast.stm"}')
+        if not args.silent:
+            print(f'Generated {pre + ".java.ast.stm"}')
+
+        with open(pre + '.javast.stm.flat', 'w', encoding='utf-8') as fp:
+            for block in seq:
+                flattened = '\n'.join(block.flatten())
+                print(f'{flattened}\n', file=fp)
+        if not args.silent:
+            print(f'Generated {pre + ".java.ast.stm.flat"}')
     except:
-        print(f'Couldn\'t generate {pre + ".java.ast.stm"}')
+        if not args.silent:
+            print(f'Couldn\'t generate {pre + ".java.ast.stm"}')
+            print(f'Couldn\'t generate {pre + ".java.ast.stm.flat"}')
 
 
 if __name__ == '__main__':
@@ -618,9 +648,23 @@ if __name__ == '__main__':
     argparser.add_argument('path',
                            help='path to .java file',
                            action='store')
+    argparser.add_argument('-a', '--all',
+                           help='iterate over each `.java` in folder',
+                           action='store_true')
     argparser.add_argument('-j', '--json',
-                           help='additionally stores the tree as a JSON object.',
-                           action='store_const',
-                           const=True,
-                           default=False)
-    generate_tree_representations(argparser.parse_args())
+                           help='additionally stores the tree as a JSON object',
+                           action='store_true')
+    argparser.add_argument('-s', '--silent',
+                           help='silent',
+                           action='store_true')
+    argparser.add_argument('--prune',
+                           help='prune tree',
+                           action='store_true')
+
+    args = argparser.parse_args()
+    if args.all:
+        for i in glob.iglob(pathname=os.path.join(args.path, '**\*.java'), recursive=True):
+            args.path = i
+            generate_tree_representations(args)
+    else:
+        generate_tree_representations(argparser.parse_args())
