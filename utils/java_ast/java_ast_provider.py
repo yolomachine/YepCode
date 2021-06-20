@@ -353,7 +353,7 @@ class JavaST:
         ))
         self.root = root or ParsedNode()
         self.__repr = []
-        if source_code:
+        if self.__javalang_root:
             self.__traverse()
             self.__fixup()
 
@@ -498,7 +498,7 @@ class JavaST:
             jo['Type'] = root.type
         if root.token and root.token != 'None':
             jo['Token'] = root.token
-        if len(root.children) > 0:
+        if root.children:
             jo['Children'] = []
 
         for c in root.children:
@@ -553,14 +553,18 @@ class JavaST:
                     c.unlink()
         if prune:
             if root.type in ['Identifier', 'OperatorSpecification']:
-                if len(root.children):
+                if root.children:
                     c = root.children[0]
                     c.unlink()
                     i = root.parent.children.index(root)
                     root.parent.children[i] = c
                 else:
                     root.unlink()
-        return sequence
+        filtered_sequence = []
+        for tree in sequence:
+            if tree.root.children:
+                filtered_sequence.append(tree)
+        return filtered_sequence
 
     def as_json(self) -> Dict[str, Any]:
         return self.__traverse_json()
@@ -591,6 +595,14 @@ class JavaST:
                 flattened.append(child)
         flattened[0] = flattened[0] + ' '.join(map(str, children_indices))
         return flattened, index
+
+    def flatten_level(self, root: ParsedNode = None, level: int = 0) -> List[str]:
+        root = root or self.root
+        flattened = [f'{level}\t{root}\t']
+        for c in root.children:
+            flattened += self.flatten(c, level + 1)
+        flattened[0] = flattened[0] + [i for i, _ in enumerate(root.children)]
+        return flattened
 
 
 def generate_tree_representations(args) -> None:

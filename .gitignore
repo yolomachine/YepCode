@@ -8,6 +8,7 @@
 *.java.ast.stm
 *.corpus
 *.vocab
+data/
 samples/
 *.w2v*
 *.ft*
