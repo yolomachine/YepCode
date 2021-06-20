@@ -4,7 +4,6 @@ import argparse
 import glob
 import os.path
 import shutil
-import time
 import multiprocessing
 import re
 from typing import List, Union
@@ -176,7 +175,7 @@ if __name__ == '__main__':
     if args.java:
         output_dir = args.output or (args.java if os.path.isdir(args.java) else os.path.dirname(args.java))
         seq = JavaSTEncoder.sequentialize(path=args.java, output_dir=output_dir, prune=args.prune)
-        JavaSTEncoder.build_corpus(sequences=seq, output_dir=output_dir)
+        JavaSTEncoder.build_corpus(sequences=seq, output_dir=output_dir, prune=args.prune)
 
     if args.corpus:
         output_dir = args.output or os.path.dirname(args.corpus)
