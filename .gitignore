@@ -6,8 +6,8 @@
 *.java
 *.java.ast
 *.java.ast.stm
+*.java.ast.stm.flat
 *.corpus
-*.vocab
 data/
 samples/
 *.w2v*
