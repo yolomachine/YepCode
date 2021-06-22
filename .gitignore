@@ -8,7 +8,13 @@
 *.java.ast.stm
 *.java.ast.stm.flat
 *.corpus
-data/
+data/**/*.txt
+data/**/*.json
+data/**/*.cpp
+data/**/*.java
+data/**/*.java.stm
+data/**/*.java.stm.flat
+!data/backup/**
 samples/
 *.w2v*
 *.ft*
