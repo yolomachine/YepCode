@@ -37,38 +37,21 @@ class JavaSTEncoder:
         return f'{JavaSTEncoder.__unfold_node(tree.root, sep)}'
 
     @staticmethod
-    def build_corpus(sequences: List[JavaST], output_dir: str = None, prune: bool = False) -> List[str]:
-        unfolded = list(map(lambda s: JavaSTEncoder.__unfold_tree(s), sequences))
-        corpus = set()
-        for i in unfolded:
-            corpus.add(i)
-
-        if output_dir:
-            try:
-                dest = os.path.join(output_dir, 'java', f'{"pruned" if prune else "full"}')
-                Path(dest).mkdir(parents=True, exist_ok=True)
-                corpus_path = os.path.join(dest, 'stm.corpus')
-                with open(corpus_path, 'w', encoding='utf-8') as fp:
-                    print('\n'.join(corpus), file=fp)
-                print(f'Generated {corpus_path}')
-            except:
-                print(f'Couldn\'t serialize corpus')
-
-        return list(corpus)
-
-    @staticmethod
-    def sequentialize(path: str, output_dir: str, prune: bool = False) -> List[JavaST]:
-        sequences = []
-        for i in tqdm(glob.iglob(pathname=os.path.join(path, '**\*.java'), recursive=True),
-                      position=0,
-                      leave=True,
-                      desc=f'Generating sequences'):
-            try:
-                tree = JavaST(source_code_path=i)
-                sequence = tree.as_statement_tree_sequence(prune)
-                sequences += sequence
+    def sequentialize(path: str, output_dir: str, prune: bool = False) -> None:
+        dest = os.path.join(output_dir, 'java', f'{"pruned" if prune else "full"}')
+        Path(dest).mkdir(parents=True, exist_ok=True)
+        corpus_path = os.path.join(dest, 'stm.corpus')
+        with open(corpus_path, 'w', encoding='utf-8') as cfp:
+            for i in tqdm(glob.iglob(pathname=os.path.join(path, '**\*.java'), recursive=True),
+                          position=0,
+                          leave=True,
+                          desc=f'Generating sequences'):
                 try:
-                    if output_dir:
+                    tree = JavaST(source_code_path=i)
+                    sequence = tree.as_statement_tree_sequence(prune)
+                    unfolded = list(map(lambda s: JavaSTEncoder.__unfold_tree(s), sequence))
+                    print('\n'.join(unfolded), file=cfp)
+                    try:
                         dest = os.path.join(output_dir, 'java', f'{"pruned" if prune else "full"}')
                         Path(dest).mkdir(parents=True, exist_ok=True)
                         source = os.path.join(dest, os.path.basename(i))
@@ -80,11 +63,10 @@ class JavaSTEncoder:
                         meta_path = pre + '.json'
                         if os.path.exists(meta_path):
                             shutil.copy2(meta_path, os.path.splitext(source)[0] + '.json')
+                    except:
+                        pass
                 except:
                     pass
-            except:
-                pass
-        return sequences
 
     @staticmethod
     def train_model(model: str, corpus_path: str, output_dir: str, prune: bool = False) -> Union[Word2Vec, FastText]:
@@ -174,8 +156,7 @@ if __name__ == '__main__':
     args = argparser.parse_args()
     if args.java:
         output_dir = args.output or (args.java if os.path.isdir(args.java) else os.path.dirname(args.java))
-        seq = JavaSTEncoder.sequentialize(path=args.java, output_dir=output_dir, prune=args.prune)
-        JavaSTEncoder.build_corpus(sequences=seq, output_dir=output_dir, prune=args.prune)
+        JavaSTEncoder.sequentialize(path=args.java, output_dir=output_dir, prune=args.prune)
 
     if args.corpus:
         output_dir = args.output or os.path.dirname(args.corpus)
